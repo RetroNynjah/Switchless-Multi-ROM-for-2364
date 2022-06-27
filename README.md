@@ -1,8 +1,8 @@
-# Retroninja Switchless Multi-ROM for 2364
+# Retroninja Switchless Multi-ROM for 2364 ROMs
 
 <img src="rev3\images\pcb_render.png" alt="3D rendering" width="800"/><br/>
 
-A a switchless multi-ROM for 2364 ROM (24-pin) type applications. The switch is controlled by an MCU that is picking up predefined magic words on the data bus.  
+A switchless multi-ROM for 2364 ROM (24-pin) type applications. The switch is controlled by an MCU that is picking up predefined magic words on the data bus.  
 This is a more generic and further developed version of my previous 1541 Multi-ROM design.
 
 Example use cases:
