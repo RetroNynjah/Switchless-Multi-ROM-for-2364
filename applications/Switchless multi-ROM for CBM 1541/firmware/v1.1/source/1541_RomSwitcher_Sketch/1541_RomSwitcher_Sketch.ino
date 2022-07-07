@@ -1,3 +1,15 @@
+/*
+#########################################################################################
+#                                                                                       #
+#  ROM switcher sketch for CBM 1541 (24-pin ROM)                                        #
+#  To be used with the Retroninja 2364 switchless multi-ROM                             #
+#                                                                                       #
+#  Version 1.1                                                                          #
+#  https://github.com/retronynjah                                                       #
+#                                                                                       #
+#########################################################################################
+*/
+
 #include <EEPROM.h>
 
 // searchString is the command that is used for switching ROM.
@@ -5,6 +17,11 @@
 // The command should be preceded by a ROM number between 1 and 4 when used.
 // The below reversed searchString in hex ascii is MORNR@ which is specified like this on the C64: 1@RNROM, 2@RNROM and so on.
 byte searchString[] = {0x4D,0x4F,0x52,0x4E,0x52,0x40};
+
+// pin defitions
+int resetPin = 11;
+int clockPin = 13;
+int ledPin = A0;
 
 int commandLength = sizeof(searchString);
 int bytesCorrect = 0;
@@ -36,57 +53,65 @@ void cleareeprom(){
 
 
 void resetdrive(){
-  pinMode(11, OUTPUT); // reset pin
-  digitalWrite(11, LOW);
+  pinMode(resetPin, OUTPUT); // reset pin
+  digitalWrite(resetPin, LOW);
   delay(50);
-  digitalWrite(11, HIGH);
+  digitalWrite(resetPin, HIGH);
   delay(50);
-  digitalWrite(11, LOW);
-  pinMode(11, INPUT);
+  digitalWrite(resetPin, LOW);
+  pinMode(resetPin, INPUT);
 
 }
 
 
 void switchrom(int romnumber){
 
-  for (int x = 0; x <= romnumber; x++){
-    digitalWrite (A0, HIGH);
-    delay(30);
-    digitalWrite (A0, LOW);
-    delay(250);
-  }
-  delay (200);
-
   // switch eprompin A13 (D8)
   if (romnumber & B0001){
-    digitalWrite(8 , HIGH);
+    digitalWrite(8, HIGH);
   }  
   else {
-    digitalWrite(8 , LOW);
+    digitalWrite(8, LOW);
   }
 
   // switch eprompin A14 (D9)
-  if (romnumber & B0010){
-    digitalWrite(9 , HIGH);
+  if (romnumber & B000010){
+    digitalWrite(9, HIGH);
   }  
   else {
-    digitalWrite(9 , LOW);
+    digitalWrite(9, LOW);
   }
 
   // switch eprompin A15 (D10)
-  if (romnumber & B0100){
-    digitalWrite(10 , HIGH);
+  if (romnumber & B000100){
+    digitalWrite(10, HIGH);
   }  
   else {
-    digitalWrite(10 , LOW);
+    digitalWrite(10, LOW);
   }
 
-    // switch eprompin A16 (A6)
-  if (romnumber & B1000){
-    digitalWrite(A6 , HIGH);
+  // switch eprompin A16 (A1)
+  if (romnumber & B001000){
+    digitalWrite(A1, HIGH);
   }  
   else {
-    digitalWrite(A6 , LOW);
+    digitalWrite(A1, LOW);
+  }
+
+  // switch eprompin A17 (A2)
+  if (romnumber & B010000){
+    digitalWrite(A2, HIGH);
+  }  
+  else {
+    digitalWrite(A2, LOW);
+  }
+
+  // switch eprompin A18 (A3)
+  if (romnumber & B100000){
+    digitalWrite(A3, HIGH);
+  }  
+  else {
+    digitalWrite(A3, LOW);
   }
 
 
@@ -97,6 +122,14 @@ void switchrom(int romnumber){
 
   resetdrive();
 
+  // blink LED to indicate selected image
+  for (int x = 0; x <= romnumber; x++){
+    digitalWrite (ledPin, HIGH);
+    delay(30);
+    digitalWrite (ledPin, LOW);
+    delay(250);
+  }
+  delay (200);
 }
 
 
@@ -108,33 +141,33 @@ void blinknumber(int num) {
   int singular = num % 10;
   
   for (int x = 1; x <= 10; x++){
-    digitalWrite(A0, HIGH);
+    digitalWrite(ledPin, HIGH);
     delay(50);
-    digitalWrite(A0, LOW);
+    digitalWrite(ledPin, LOW);
     delay(50);
   }
   delay(2000);
 
   for (int x = 1; x <= hundreds; x++){
-    digitalWrite(A0, HIGH);
+    digitalWrite(ledPin, HIGH);
     delay(50);
-    digitalWrite(A0, LOW);
+    digitalWrite(ledPin, LOW);
     delay(350);
   }
   delay(2000);
 
   for (int x = 1; x <= tens; x++){
-    digitalWrite(A0, HIGH);
+    digitalWrite(ledPin, HIGH);
     delay(50);
-    digitalWrite(A0, LOW);
+    digitalWrite(ledPin, LOW);
     delay(350);
   }
   delay(2000);
 
   for (int x = 1; x <= singular; x++){
-    digitalWrite(A0, HIGH);
+    digitalWrite(ledPin, HIGH);
     delay(50);
-    digitalWrite(A0, LOW);
+    digitalWrite(ledPin, LOW);
     delay(350);
   }
 }
@@ -146,15 +179,17 @@ void setup() {
   // set data pins as inputs
   DDRD = B00000000;
   
-  pinMode(13, INPUT); // clock pin
-  pinMode(11, INPUT); // reset pin. keep as input while not performing reset.
+  pinMode(clockPin, INPUT); // clock pin
+  pinMode(resetPin, INPUT); // reset pin. keep as input while not performing reset.
   
   pinMode(8, OUTPUT); // eprom A13
   pinMode(9, OUTPUT); // eprom A14
   pinMode(10, OUTPUT); // eprom A15
-  pinMode(A6, OUTPUT); // eprom A16
+  pinMode(A1, OUTPUT); // eprom A16
+  pinMode(A2, OUTPUT); // eprom A17
+  pinMode(A3, OUTPUT); // eprom A18
 
-  pinMode (A0, OUTPUT); //LED
+  pinMode (ledPin, OUTPUT); //LED
     
   // retrieve last used ROM from ATmega EEPROM and switch ROM using ROM address pins A13-A16
   int lastROM = EEPROM.read(0);
@@ -165,7 +200,7 @@ void setup() {
   switchrom(lastROM);
   
   // enable pin change interrupt on pin D13(PB5) connected to R/W (pin 34) on 6502
-  pciSetup(13); 
+  pciSetup(clockPin); 
 }
 
 
