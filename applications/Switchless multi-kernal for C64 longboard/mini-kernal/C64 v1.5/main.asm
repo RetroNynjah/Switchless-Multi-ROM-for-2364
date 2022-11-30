@@ -4,6 +4,7 @@
 ; 1.2   Improved menu routines and added a sprite
 ; 1.3   Cleaned up code. Clear screen to avoid garbage during reset
 ; 1.4   Added command for C128DCR
+; 1.5   Scan keys once per screen refresh to debounce keys
 
 CHARSET   2
 NOLOADADDR
@@ -124,6 +125,8 @@ disablesprites
 
 
 scankey lda #$00
+        cmp $d012       ; wait for raster line 0 to only scan keys once
+        bne scankey     ; per frame to debounce keys 
         sta SHIFTS      ; clear old shift pressed indicators
         tay             ; clear pressed key
         ; find out if any shift key is pressed and set #$01 at $shiftkey
@@ -228,7 +231,7 @@ mnutxt  ; Menu layout
         text '                                        '
         text '               RetroNinja               '
         text '                                        '
-        text '        C64 Kernal Switcher v1.4        '
+        text '        C64 Kernal Switcher v1.5        '
         text '                                        '
         text '                                        '
         ; Up to 10 menu choices. number of shown lines controlled by value in $kernalimages
