@@ -4,7 +4,7 @@
 #  Kernal switcher sketch for C64 longboard (24-pin ROM)                                #
 #  To be used with the Retroninja 2364 switchless multi-ROM                             #
 #                                                                                       #
-#  Version 1.3                                                                          #
+#  Version 1.4                                                                          #
 #  https://github.com/retronynjah                                                       #
 #                                                                                       #
 #########################################################################################
@@ -26,30 +26,33 @@ int ledPin = A0;
 int savedROM;
 int commandLength = sizeof(searchString);
 int bytesCorrect = 0;
+int blinkROM = 0;
+bool ledstate = LOW;
+long ledchange = 0;
 volatile bool clockstate;
 bool restorestate;
 bool restoreholding = false;
 bool inmenu = false;
 long restorepressed;
 
-void pciSetup(byte pin)
-{
-    // enable Pin Change Interrupt for requested pin
-    *digitalPinToPCMSK(pin) |= bit (digitalPinToPCMSKbit(pin));  // enable pin
-    PCIFR |= bit (digitalPinToPCICRbit(pin)); // clear any outstanding interrupt
-    PCICR |= bit (digitalPinToPCICRbit(pin)); // enable interrupt for the group
+void pciSetup(byte pin) {
+  // enable Pin Change Interrupt for requested pin
+  *digitalPinToPCMSK(pin) |= bit(digitalPinToPCMSKbit(pin));  // enable pin
+  PCIFR |= bit(digitalPinToPCICRbit(pin));                    // clear any outstanding interrupt
+  PCICR |= bit(digitalPinToPCICRbit(pin));                    // enable interrupt for the group
 }
 
 
-ISR (PCINT0_vect) // handle pin change interrupt for D8 to D13 here
-{    
+
+ISR(PCINT0_vect)  // handle pin change interrupt for D8 to D13 here
+{
   // read state of clock pin (D13)
   clockstate = PINB & B100000;
 }
- 
 
-void cleareeprom(){
-  for (int i = 0 ; i < EEPROM.length() ; i++) {
+
+void cleareeprom() {
+  for (int i = 0; i < EEPROM.length(); i++) {
     EEPROM.write(i, 0);
   }
 }
@@ -123,22 +126,15 @@ void switchrom(int romnumber, bool doreset){
     inmenu = false;
   }
   
-  if (doreset){
+  if (doreset) {
     // Release reset
     delay(200);
     pinMode(resetPin, INPUT);
-    // Give system some time to reset before entering loop.
-    // Not needed if LED blink is enabled below
-    //delay(500);
   }
 
-  // blink LED ROM number of times
-  for (int x = 1; x <= romnumber; x++){
-    digitalWrite (ledPin, HIGH);
-    delay(70);
-    digitalWrite (ledPin, LOW);
-    delay(250);
-  }
+  // Give system some time to reset before entering main loop again.
+  delay(500);
+  blinkROM = romnumber;
 }
 
 
@@ -158,7 +154,7 @@ void setup() {
   pinMode (A1, OUTPUT); // eprom A16
   pinMode (A2, OUTPUT); // eprom A17
   pinMode (A3, OUTPUT); // eprom A18
-  pinMode (ledPin, OUTPUT); // LED
+  pinMode (ledPin, OUTPUT);
 
   pinMode (restorePin, INPUT);
   digitalWrite(ledPin, LOW);
@@ -168,70 +164,111 @@ void setup() {
   if (savedROM > 15){
     savedROM = 0;
   }
+  if (savedROM == 0) {
+    inmenu = true;
+  }
+  
   switchrom(savedROM, false);
   
   // Release reset
   pinMode(resetPin, INPUT);
   delay(500); // Give system some time to finish reset before entering loop
 
-  // Enable pin change interrupt on pin D13(PB5) connected to R/W (pin 38) on 6510/8500
+  // Enable pin change interrupt on pin D13(PB5) connected to R/!W signal
   pciSetup(clockPin);
   
 }
 
 
 void loop() {
-  // Read state of restore key
-  restorestate = PINB & B010000;
-  if (restorestate == LOW) {
-    // restore pressed
-    digitalWrite(ledPin, HIGH);
-    if (!inmenu){
-      if (restoreholding == false){
+
+  if (inmenu) {
+    ledstate = LOW;
+    blinkROM = 0;
+    // while in menu mode, listen for command
+    if (clockstate == HIGH) {
+      byte byteCurr = PIND;
+      clockstate = LOW;
+      if (bytesCorrect == commandLength) {
+        // We have already found our command string. This byte must be the ROM number
+        // Valid numbers are 1-15
+        if ((byteCurr >= 1) && (byteCurr <= 15)) {
+          // ROM number within valid range. Switch ROM and perform a reset
+          switchrom(byteCurr, true);
+        } else {
+          bytesCorrect = 0;
+        }
+      }
+      // We don't have full command string yet. Check if current byte is what we are looking for
+      else if (byteCurr == searchString[bytesCorrect]) {
+        // Increase bytesCorrect to check for next character
+        bytesCorrect++;
+      } else {
+        bytesCorrect = 0;
+      }
+    }
+
+    // Check if reset pin is active (low)
+    if (!(PINB & B1000)) {
+      // Reset is active. Other switch might be active and doing a reset or user is resetting.
+      // Switch ROM to give up menu in case we're in menu and don't perform another reset as a reset is already in progress.
+      switchrom(savedROM, false);
+    }
+  } else {
+    // while not in menu mode, listen for restore key
+    restorestate = PINB & B010000;
+    if (restorestate == LOW) {
+      // restore pressed
+      ledstate = HIGH;
+      if (restoreholding == false) {
+        // start counting restore hold time
         restorepressed = millis();
         restoreholding = true;
       }
-      if ((millis() - restorepressed) > 2000){
+      if ((millis() - restorepressed) > 2000) {
         // Switch to menu ROM and perform a reset
         inmenu = true;
         switchrom(0, true);
+        ledstate = LOW;
+        restoreholding = false;
       }
-    }
-  }
-  else{
-    digitalWrite(ledPin, LOW);
-    restoreholding = false;
-  }
-    
-  if (clockstate == HIGH){
-    byte byteCurr = PIND;
-    clockstate=LOW;
-    if (bytesCorrect == commandLength){
-      // We have already found our command string. This byte must be the ROM number
-      // Valid numbers are 1-15
-      if ((byteCurr >= 1)&&(byteCurr<=15)){
-        // ROM number within valid range. Switch ROM and perform a reset
-        switchrom(byteCurr, true);
+    } else {
+      // restore not held
+      if (restoreholding){
+        // restore has just been released
+        ledstate = LOW;
+        restoreholding = false;
       }
-      else{
-        bytesCorrect=0;
-      }
+      
+      //if kernal has just been switched we can do some led blinking now to indicate selected kernal
+      if (blinkROM > 0) {
+        if (ledchange == 0) {
+          // first blink turn on LED and start counting
+          ledstate = HIGH;
+          ledchange = millis() + 50;
+        } else {
+          if (millis() > ledchange) {
+            // time to toggle LED
+            if (ledstate == HIGH) {
+              ledstate = LOW;
+              blinkROM--;
+              if (blinkROM > 0) {
+                // turn off LED and start counting
+                ledchange = millis() + 250;
+              } else {
+                ledchange = 0;
+              }
+            } else {
+              // turn on LED and start counting
+              if (blinkROM > 0) {
+                ledstate = HIGH;
+                ledchange = millis() + 50;
+              }
+            }
+          }
+        }
+      } 
     }
-
-    // We don't have full command string yet. Check if current byte is what we are looking for
-    if (byteCurr == searchString[bytesCorrect]){
-      // Increase bytesCorrect to check for next character
-      bytesCorrect++;
-    }
-    else {
-      bytesCorrect = 0;
-    }
-  }
-
-  // Check if reset pin is active (low)
-  if (!(PINB & B1000)){
-    // Reset is active. Other switch might be active and doing a reset or user is resetting.
-    // Switch ROM to give up menu in case we're in menu and don't perform another reset.
-    switchrom(savedROM, false);
+    digitalWrite(ledPin, ledstate);
   }
 }
