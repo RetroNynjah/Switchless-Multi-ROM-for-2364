@@ -4,7 +4,7 @@
 #  ROM switcher sketch for CBM 1541 (24-pin ROM)                                        #
 #  To be used with the Retroninja 2364 switchless multi-ROM                             #
 #                                                                                       #
-#  Version 1.1                                                                          #
+#  Version 1.2                                                                          #
 #  https://github.com/retronynjah                                                       #
 #                                                                                       #
 #########################################################################################
@@ -26,6 +26,7 @@ int ledPin = A0;
 int commandLength = sizeof(searchString);
 int bytesCorrect = 0;
 volatile bool state;
+static byte byteCurr;
 
 
 void pciSetup(byte pin)
@@ -134,53 +135,14 @@ void switchrom(int romnumber){
 
 
 
-// function for debugging using onboard LED
-void blinknumber(int num) {
-  int hundreds = num / 100;
-  int tens = num % 100 / 10;
-  int singular = num % 10;
-  
-  for (int x = 1; x <= 10; x++){
-    digitalWrite(ledPin, HIGH);
-    delay(50);
-    digitalWrite(ledPin, LOW);
-    delay(50);
-  }
-  delay(2000);
-
-  for (int x = 1; x <= hundreds; x++){
-    digitalWrite(ledPin, HIGH);
-    delay(50);
-    digitalWrite(ledPin, LOW);
-    delay(350);
-  }
-  delay(2000);
-
-  for (int x = 1; x <= tens; x++){
-    digitalWrite(ledPin, HIGH);
-    delay(50);
-    digitalWrite(ledPin, LOW);
-    delay(350);
-  }
-  delay(2000);
-
-  for (int x = 1; x <= singular; x++){
-    digitalWrite(ledPin, HIGH);
-    delay(50);
-    digitalWrite(ledPin, LOW);
-    delay(350);
-  }
-}
-
-
 
 void setup() {
 
   // set data pins as inputs
   DDRD = B00000000;
   
-  pinMode(clockPin, INPUT); // clock pin
-  pinMode(resetPin, INPUT); // reset pin. keep as input while not performing reset.
+  pinMode(clockPin, INPUT); // R/!W
+  pinMode(resetPin, INPUT); // Keep reset pin as input while not performing reset.
   
   pinMode(8, OUTPUT); // eprom A13
   pinMode(9, OUTPUT); // eprom A14
@@ -189,7 +151,7 @@ void setup() {
   pinMode(A2, OUTPUT); // eprom A17
   pinMode(A3, OUTPUT); // eprom A18
 
-  pinMode (ledPin, OUTPUT); //LED
+  pinMode (ledPin, OUTPUT);
     
   // retrieve last used ROM from ATmega EEPROM and switch ROM using ROM address pins A13-A16
   int lastROM = EEPROM.read(0);
@@ -206,28 +168,39 @@ void setup() {
 
 void loop() {
   if (state == HIGH){
+    byteCurr = PIND;
     state=LOW;
-    byte byteCurr = PIND;
       
-    if (bytesCorrect == commandLength){
-      // we have our search string. This byte must be the ROM number
-      // valid numbers are 1-8 (ASCII 49-56)
-      if ((byteCurr >= 49)&&(byteCurr<=56)){
-        // rom number within valid range. Switch rom
-        switchrom(byteCurr - 49);
-      }
-      else{
-        bytesCorrect=0;
-      }
-      //blinknumber(byteCurr);
-    }
-
     // we don't have full search string yet. check if current byte is what we are looking for
     if (byteCurr == searchString[bytesCorrect]){
-      // increase bytesCorrect to check for next character
+      // It is the byte we're waiting for. increase byte counter
       bytesCorrect++;
+      if (bytesCorrect == commandLength){
+        // we have our full search string. wait for next byte
+        while(state == LOW){}
+        byteCurr = PIND;
+        // This byte should be the ROM number
+        // valid numbers are 1-4 (ASCII 49-52)
+        if ((byteCurr >= 49)&&(byteCurr<=52)){
+              // rom number within valid range. Switch rom
+              switchrom(byteCurr - 49);
+        }
+        else if(byteCurr == searchString[0]){
+              // it was the first byte in string, starting with new string
+              bytesCorrect = 1;
+        }
+        else{
+          bytesCorrect = 0;
+        }
+      }
+    }
+    // byte isn't what we are looking for, is it the first byte in the string then?
+    else if(byteCurr == searchString[0]){
+        // it was the first byte in string, starting with new string
+        bytesCorrect = 1;
     }
     else {
+      // byte not correct at all. Start over from the beginning
       bytesCorrect = 0;
     }
   }
