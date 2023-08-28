@@ -4,7 +4,7 @@ CHARSET   2
 NOLOADADDR
 GenerateTo vic20kernalmenu.bin
 
-KRNIMGS = 4    ; number of kernal images in menu/ROM 1..10 where 1 would be quite pointless :)
+KRNIMGS = 6    ; number of kernal images in menu/ROM 1..10 where 1 would be quite pointless :)
 VICREG  = $9000
 CHRC    = $00   ; mnutxt color (VIC-20 default = #$00 )
 CHRCHL  = $06   ; menu highlightedtext color
@@ -177,11 +177,11 @@ mnutxt  ; Menu layout
         text '         v1.0         '
         text '                      '
         ; Up to 10 menu choices. number of shown lines controlled by value in $kernalimages
-        text 'CBM DOS (EN PAL)      '
         text 'CBM DOS (EN NTSC)     '
+        text 'CBM DOS (EN PAL)      '
         text 'CBM DOS (SW/FI PAL)   '
-        text 'JiffyDOS (EN PAL)     '
         text 'JiffyDOS (EN NTSC)    '
+        text 'JiffyDOS (EN PAL)     '
         text 'JiffyDOS (SW/FI PAL)  '
         text '                      '
         text '                      '
